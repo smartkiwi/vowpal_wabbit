@@ -21,6 +21,8 @@ using namespace std;
 #include "memory.h"
 #include "rand48.h"
 #include "global_data.h"
+#include <sys/mman.h>
+#include <errno.h>
 
 /* Define the last version where files are backward compatible. */
 #define LAST_COMPATIBLE_VERSION "6.1.3"
@@ -35,12 +37,32 @@ void initialize_regressor(vw& all)
 
   size_t length = ((size_t)1) << all.num_bits;
   all.reg.weight_mask = (length << all.reg.stride_shift) - 1;
-  all.reg.weight_vector = (weight *)calloc_or_die(length << all.reg.stride_shift, sizeof(weight));
+  void *weight_vector_addr = calloc_or_die(length << all.reg.stride_shift, sizeof(weight));
+  all.reg.weight_vector = (weight *)weight_vector_addr;
   if (all.reg.weight_vector == NULL)
     {
       cerr << all.program_name << ": Failed to allocate weight array with " << all.num_bits << " bits: try decreasing -b <bits>" << endl;
       throw exception();
     }
+#ifdef MADV_MERGEABLE
+    // mark weight vector as KSM sharable
+    // it allows to save memory if you run multiple instances of the same model
+    // see more https://www.kernel.org/doc/Documentation/vm/ksm.txt
+    // you need to have Linux kernel >= 2.6.32
+    // and ksmd enabled
+    // you can enable ksmd with sudo "echo 1 > /sys/kernel/mm/ksm/run"
+    size_t ksm_size = (length << all.reg.stride_shift) * sizeof(weight);
+    size_t page_size = sysconf(_SC_PAGE_SIZE);
+    const uintptr_t raw_address = (uintptr_t) weight_vector_addr;
+    const uintptr_t page_address = (raw_address / page_size ) * page_size;
+    assert (page_address <= raw_address);
+    const size_t new_length = ksm_size + (size_t) (raw_address - page_address);
+    if (0 != madvise((void *)page_address, new_length, MADV_MERGEABLE)) {
+        int errsv = errno;
+        cerr << all.program_name << "Failed to mark weight vector address space as KSM mergeble. errro code: " << errsv << endl;
+        throw exception();
+    }
+#endif
   if (all.random_weights)
     {
       for (size_t j = 0; j < length; j++)
