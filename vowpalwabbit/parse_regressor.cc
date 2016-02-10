@@ -45,23 +45,26 @@ void initialize_regressor(vw& all)
       throw exception();
     }
 #ifdef MADV_MERGEABLE
-    // mark weight vector as KSM sharable
-    // it allows to save memory if you run multiple instances of the same model
-    // see more https://www.kernel.org/doc/Documentation/vm/ksm.txt
-    // you need to have Linux kernel >= 2.6.32
-    // and ksmd enabled
-    // you can enable ksmd with sudo "echo 1 > /sys/kernel/mm/ksm/run"
-    size_t ksm_size = (length << all.reg.stride_shift) * sizeof(weight);
-    size_t page_size = sysconf(_SC_PAGE_SIZE);
-    const uintptr_t raw_address = (uintptr_t) weight_vector_addr;
-    const uintptr_t page_address = (raw_address / page_size ) * page_size;
-    assert (page_address <= raw_address);
-    const size_t new_length = ksm_size + (size_t) (raw_address - page_address);
-    if (0 != madvise((void *)page_address, new_length, MADV_MERGEABLE)) {
-        int errsv = errno;
-        cerr << all.program_name << "Failed to mark weight vector address space as KSM mergeble. errro code: " << errsv << endl;
-        throw exception();
-    }
+  // mark weight vector as KSM sharable
+  // it allows to save memory if you run multiple instances of the same model
+  // see more https://www.kernel.org/doc/Documentation/vm/ksm.txt
+  // you need to have Linux kernel >= 2.6.32
+  // and ksmd enabled
+  // you can enable ksmd with sudo "echo 1 > /sys/kernel/mm/ksm/run"
+
+  // calculate page aligned address and length
+  size_t ksm_size = (length << all.reg.stride_shift) * sizeof(weight);
+  size_t page_size = sysconf(_SC_PAGE_SIZE);
+  const uintptr_t raw_address = (uintptr_t) weight_vector_addr;
+  const uintptr_t page_address = (raw_address / page_size ) * page_size;
+  assert (page_address <= raw_address);
+  const size_t new_length = ksm_size + (size_t) (raw_address - page_address);
+  // mark address space as a candidate for merging
+  if (0 != madvise((void *)page_address, new_length, MADV_MERGEABLE)) {
+      int errsv = errno;
+      cerr << all.program_name << "Failed to mark weight vector address space as KSM mergeble. errro code: " << errsv << endl;
+      throw exception();
+  }
 #endif
   if (all.random_weights)
     {
