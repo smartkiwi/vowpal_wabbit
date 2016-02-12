@@ -47,16 +47,15 @@ void initialize_regressor(vw& all)
   // mark weight vector as KSM sharable
   // it allows to save memory if you run multiple instances of the same model
   // see more https://www.kernel.org/doc/Documentation/vm/ksm.txt
-  // you need to have Linux kernel >= 2.6.32
-  // and ksmd enabled
+  // you need to have Linux kernel >= 2.6.32 and KSM enabled
+  // to check is KSM enabled: `grep KSM /boot/config-`uname -r` CONFIG_KSM=y`
   // you can enable ksmd with sudo "echo 1 > /sys/kernel/mm/ksm/run"
 
   // mark address space as a candidate for merging
   size_t ksm_size_memalign = (length << all.reg.stride_shift) * sizeof(weight);
   if (0 != madvise((void *)all.reg.weight_vector, ksm_size_memalign, MADV_MERGEABLE)) {
       int errsv = errno;
-      cerr << all.program_name << "Failed to mark weight vector address space as KSM mergeble. error code: " << errsv << ":" << strerror(errno) << endl;
-      throw exception();
+      cerr << all.program_name << "Failed to mark weight vector address space as KSM mergeble. error code: " << errsv << ":" << strerror(errsv) << endl;
   }
 #endif
   if (all.random_weights)

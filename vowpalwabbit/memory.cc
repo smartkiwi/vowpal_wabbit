@@ -1,12 +1,13 @@
 #include <stdlib.h>
 #include <iostream>
 #include <errno.h>
+#include <string.h>
 
 void* calloc_or_die(size_t nmemb, size_t size)
 {
   if (nmemb == 0 || size == 0)
     return NULL;
-  
+
   void* data = calloc(nmemb, size);
   if (data == NULL) {
     std::cerr << "internal error: memory allocation failed; dying!" << std::endl;
@@ -28,9 +29,11 @@ void* calloc_aligned_or_die(size_t nmemb, size_t size)
   if (0 != posix_memalign(&data, sysconf(_SC_PAGE_SIZE), length))
   {
     int errsv = errno;
-    std::cerr << "internal error: memory allocation failed; dying!. errro code: " << errsv << std::endl;
+    std::cerr << "internal error: memory allocation failed; dying!. errro code: " << errsv << ":" << strerror(errsv) << std::endl;
     throw std::exception();
   }
+
+  memset(data, 0, length);
 
   if (data == NULL) {
     std::cerr << "internal error: memory allocation failed; dying!" << std::endl;
