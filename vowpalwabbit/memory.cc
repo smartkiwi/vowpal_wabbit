@@ -33,12 +33,12 @@ void* calloc_aligned_or_die(size_t nmemb, size_t size)
     throw std::exception();
   }
 
-  memset(data, 0, length);
-
   if (data == NULL) {
     std::cerr << "internal error: memory allocation failed; dying!" << std::endl;
     throw std::exception();
   }
+
+  memset(data, 0, length);
 
   return data;
 }
