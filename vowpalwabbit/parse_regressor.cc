@@ -37,8 +37,7 @@ void initialize_regressor(vw& all)
 
   size_t length = ((size_t)1) << all.num_bits;
   all.reg.weight_mask = (length << all.reg.stride_shift) - 1;
-  void *weight_vector_addr = calloc_or_die(length << all.reg.stride_shift, sizeof(weight));
-  all.reg.weight_vector = (weight *)weight_vector_addr;
+  all.reg.weight_vector = (weight *)calloc_aligned_or_die(length << all.reg.stride_shift, sizeof(weight));
   if (all.reg.weight_vector == NULL)
     {
       cerr << all.program_name << ": Failed to allocate weight array with " << all.num_bits << " bits: try decreasing -b <bits>" << endl;
@@ -52,17 +51,11 @@ void initialize_regressor(vw& all)
   // and ksmd enabled
   // you can enable ksmd with sudo "echo 1 > /sys/kernel/mm/ksm/run"
 
-  // calculate page aligned address and length
-  size_t ksm_size = (length << all.reg.stride_shift) * sizeof(weight);
-  size_t page_size = sysconf(_SC_PAGE_SIZE);
-  const uintptr_t raw_address = (uintptr_t) weight_vector_addr;
-  const uintptr_t page_address = (raw_address / page_size ) * page_size;
-  assert (page_address <= raw_address);
-  const size_t new_length = ksm_size + (size_t) (raw_address - page_address);
   // mark address space as a candidate for merging
-  if (0 != madvise((void *)page_address, new_length, MADV_MERGEABLE)) {
+  size_t ksm_size_memalign = (length << all.reg.stride_shift) * sizeof(weight);
+  if (0 != madvise((void *)all.reg.weight_vector, ksm_size_memalign, MADV_MERGEABLE)) {
       int errsv = errno;
-      cerr << all.program_name << "Failed to mark weight vector address space as KSM mergeble. errro code: " << errsv << endl;
+      cerr << all.program_name << "Failed to mark weight vector address space as KSM mergeble. error code: " << errsv << ":" << strerror(errno) << endl;
       throw exception();
   }
 #endif
